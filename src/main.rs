@@ -17,10 +17,11 @@ const LEXICON: &str = include_str!("lexicon.txt");
 const MAX_WORDS_IN_FRAME: usize = 5;
 const HEALTH_CHAR: &str = "o";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Word {
     text: String,
     pos: (u16, u16), // col, row
+    e_frame: i32,
 }
 
 fn main() -> io::Result<()> {
@@ -46,6 +47,7 @@ struct Game {
     input: String,
     u_words: Vec<String>, // words from lexicon not yet used
     c_words: Vec<Word>,   // vec of current words on screen / words that have been used
+    e_words: Vec<Word>,   // words currently exploding
     score: i32,
     columns: u16,
     rows: u16,
@@ -63,6 +65,7 @@ impl Game {
             input: String::new(),
             u_words,
             c_words: Vec::new(),
+            e_words: Vec::new(),
             score: 0,
             columns: 0,
             rows: 0,
@@ -124,9 +127,19 @@ impl Game {
             self.write_words()?;
         }
 
+        // generate more words when needed
         if self.c_words.len() < MAX_WORDS_IN_FRAME {
             self.gen_word();
         }
+
+        // write word explosion animation
+        let mut new_e_words: Vec<Option<Word>> = Vec::new();
+        for mut word in self.e_words.clone() {
+            word.e_frame += 1;
+            new_e_words.push(self.explosion_anim(word)?);
+        }
+        self.e_words.clear();
+        self.e_words = new_e_words.into_iter().filter_map(|x| x).collect();
 
         self.write_ui()?;
 
@@ -189,7 +202,50 @@ impl Game {
         self.c_words.push(Word {
             text: rand_word.to_string(),
             pos: (rand_col, 0),
+            e_frame: 0,
         });
+    }
+
+    /// (c_col, c_row) = the center of the explosion
+    /// frame = which frame the explosion is currently in
+    fn explosion_anim(&mut self, word: Word) -> io::Result<Option<Word>> {
+        let row_1;
+        let row_2;
+        let row_3;
+        match word.e_frame {
+            1..3 => {
+                row_1 = "     ".to_string();
+                row_2 = "  x  ".to_string();
+                row_3 = "     ".to_string();
+            }
+            3..6 => {
+                row_1 = "     ".to_string();
+                row_2 = " < > ".to_string();
+                row_3 = "     ".to_string();
+            }
+            6..9 => {
+                row_1 = "  #  ".to_string();
+                row_2 = ">   <".to_string();
+                row_3 = "  #  ".to_string();
+            }
+            9..12 => {
+                row_1 = "#   #".to_string();
+                row_2 = "     ".to_string();
+                row_3 = "#   #".to_string();
+            }
+            _ => {
+                return Ok(None);
+            }
+        }
+
+        self.so.queue(cursor::MoveTo(word.pos.0 - 3, word.pos.1 - 1))?;
+        self.so.write(row_1.as_bytes())?;
+        self.so.queue(cursor::MoveTo(word.pos.0 - 3, word.pos.1))?;
+        self.so.write(row_2.as_bytes())?;
+        self.so.queue(cursor::MoveTo(word.pos.0 - 3, word.pos.1 + 1))?;
+        self.so.write(row_3.as_bytes())?;
+
+        Ok(Some(word))
     }
 
     fn write_words(&mut self) -> io::Result<()> {
@@ -260,6 +316,7 @@ impl Game {
                 if self.score % 5 == 0 {
                     self.fallspeed = self.fallspeed - 1;
                 }
+                self.e_words.push(self.c_words[i].clone());
                 index = Some(i);
             }
         }
