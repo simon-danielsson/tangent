@@ -25,7 +25,7 @@ built in Rust.</em>
 ---
 <div id="info"></div>
 
-## 📦 Information
+## 📌 Information
   
 Tangent is a classic falling-word style keyboard exercise game for the terminal. Built using [crossterm](https://github.com/crossterm-rs/crossterm)
   
