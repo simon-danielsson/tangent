@@ -1,8 +1,22 @@
 [package]
 name = "tangent"
-version = "0.1.0"
+authors = ["Simon Danielsson <contact@simondanielsson.se>"]
+version = "0.2.0"
 edition = "2024"
+description = "Typing game for the terminal!"
+license = "MIT"
+repository = "https://github.com/simon-danielsson/tangent"
+homepage = "https://www.simondanielsson.se"
+exclude = ["media/"]
+readme = "README.md"
 
 [dependencies]
 crossterm = "0.29.0"
 rand = "0.9.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
