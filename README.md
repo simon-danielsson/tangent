@@ -22,6 +22,8 @@ built in Rust.</em>
 </p>  
    
 
+![Usage](media/1.gif)
+
 ---
 <div id="info"></div>
 
