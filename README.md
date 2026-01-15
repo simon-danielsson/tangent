@@ -22,7 +22,9 @@ built in Rust.</em>
 </p>  
    
 
-![Usage](media/1.gif)
+<p align="center">
+  <img src="media/1.gif" alt="screenshot">
+</p>
 
 ---
 <div id="info"></div>
