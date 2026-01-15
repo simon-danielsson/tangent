@@ -16,11 +16,17 @@ const FALLING_SPD: i32 = FPS as i32; // fallspeed counted with: FPS / FALLING_SP
 const LEXICON: &str = include_str!("lexicon.txt");
 const MAX_WORDS_IN_FRAME: usize = 3;
 
+struct Rect {
+    x: u16,
+    y: u16,
+    w: u16,
+    h: u16,
+}
+
 #[derive(Clone)]
 struct Word {
     text: String,
-    pos: (u16, u16),      // col, row
-    prev_pos: (u16, u16), // col, row
+    pos: (u16, u16), // col, row
 }
 
 fn main() -> io::Result<()> {
@@ -75,7 +81,7 @@ impl Game {
     }
 
     fn game_loop(&mut self) -> io::Result<()> {
-        if poll(Duration::from_millis(2))? {
+        if poll(Duration::ZERO)? {
             let event = read()?;
 
             match event {
@@ -105,7 +111,6 @@ impl Game {
         if self.fallspeed_cnt >= FALLING_SPD {
             let mut index: Option<usize> = None;
             for (i, word) in self.c_words.iter_mut().enumerate() {
-                word.prev_pos = word.pos;
                 if word.pos.1 == self.rows - 3 {
                     index = Some(i);
                 } else {
@@ -117,9 +122,11 @@ impl Game {
                 self.c_words.remove(i);
                 self.health -= 1;
             }
+            self.clear_words()?;
             self.write_words()?;
         } else {
             self.fallspeed_cnt += 1;
+            self.clear_words()?;
             self.write_words()?;
         }
 
@@ -144,21 +151,51 @@ impl Game {
 
     fn gen_word(&mut self) {
         let mut rng = rand::rng();
-        let rand_word_i = rng.random_range(0..=self.u_words.len());
-        let rand_word = self.u_words[rand_word_i].clone();
-        self.u_words.remove(rand_word_i);
-        let rand_col = rng.random_range((0)..=(self.columns - 5));
+
+        let rand_word_i = rng.random_range(0..self.u_words.len());
+        let rand_word = &self.u_words[rand_word_i];
+
+        let word_len = rand_word.chars().count() as u16;
+        let max_col = if self.columns > word_len {
+            self.columns - word_len
+        } else {
+            0
+        };
+
+        let mut attempts = 0;
+        let mut rand_col;
+        'outer: loop {
+            attempts += 1;
+            if attempts > 100 {
+                rand_col = 0;
+                break;
+            }
+
+            rand_col = rng.random_range(0..=max_col);
+
+            for word in &self.c_words {
+                let word_start = word.pos.0;
+                let word_end = word.pos.0 + word.text.chars().count() as u16;
+
+                let new_start = rand_col;
+                let new_end = rand_col + word_len;
+
+                if !(new_end <= word_start || new_start >= word_end) {
+                    continue 'outer;
+                }
+            }
+
+            break;
+        }
+
         self.c_words.push(Word {
-            text: rand_word,
+            text: rand_word.to_string(),
             pos: (rand_col, 0),
-            prev_pos: (rand_col, 0),
         });
     }
 
     fn write_words(&mut self) -> io::Result<()> {
         for word in self.c_words.iter() {
-            self.so.queue(cursor::MoveTo(word.prev_pos.0, word.prev_pos.1))?;
-            terminal::Clear(ClearType::CurrentLine);
             self.so.queue(cursor::MoveTo(word.pos.0, word.pos.1))?;
             self.so.write(word.text.as_bytes())?;
         }
@@ -185,7 +222,7 @@ impl Game {
     fn check_validity_of_input(&mut self) {
         let mut index: Option<usize> = None;
         for (i, word) in self.c_words.iter().enumerate() {
-            if self.input.to_lowercase() == word.text {
+            if self.input.to_lowercase().trim() == word.text.trim() {
                 self.score += 1;
                 index = Some(i);
             }
@@ -193,6 +230,14 @@ impl Game {
         if let Some(i) = index {
             self.c_words.remove(i);
         }
+    }
+
+    fn clear_words(&mut self) -> io::Result<()> {
+        for row in 0..=(self.rows - 3) {
+            self.so.queue(cursor::MoveTo(0, row))?;
+            self.so.write(" ".repeat(self.columns as usize).as_bytes())?;
+        }
+        Ok(())
     }
 
     fn clear_screen(&mut self) {
