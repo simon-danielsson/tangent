@@ -12,7 +12,7 @@ use std::{
 };
 
 const FPS: f64 = 30.0;
-const FALLING_SPD: i32 = 18; // fallspeed counted with: FPS / FALLING_SPD
+const INIT_FALLING_SPD: i32 = 30; // fallspeed counted with: FPS / FALLING_SPD
 const LEXICON: &str = include_str!("lexicon.txt");
 const MAX_WORDS_IN_FRAME: usize = 5;
 const HEALTH_CHAR: &str = "o";
@@ -27,7 +27,7 @@ fn main() -> io::Result<()> {
     enable_raw_mode()?;
     let stdout = stdout();
     let u_words: Vec<String> = LEXICON.lines().map(|s| s.to_string()).collect();
-    let mut game: Game = Game::new(stdout, u_words);
+    let mut game: Game = Game::new(stdout, u_words, INIT_FALLING_SPD);
 
     game.setup()?;
     game.intro()?;
@@ -52,11 +52,12 @@ struct Game {
     quit: bool,
     fps: Duration,
     fallspeed_cnt: i32,
+    fallspeed: i32,
     health: i32,
 }
 
 impl Game {
-    fn new(so: Stdout, u_words: Vec<String>) -> Self {
+    fn new(so: Stdout, u_words: Vec<String>, fallspeed: i32) -> Self {
         Self {
             so,
             input: String::new(),
@@ -68,6 +69,7 @@ impl Game {
             quit: false,
             fps: get_fps(FPS),
             fallspeed_cnt: 0,
+            fallspeed,
             health: 3,
         }
     }
@@ -100,7 +102,7 @@ impl Game {
         }
 
         // make words fall - if a word has fallen to far it gets removed
-        if self.fallspeed_cnt >= FALLING_SPD {
+        if self.fallspeed_cnt >= self.fallspeed {
             let mut index: Option<usize> = None;
             for (i, word) in self.c_words.iter_mut().enumerate() {
                 if word.pos.1 == self.rows - 3 {
@@ -127,6 +129,7 @@ impl Game {
         }
 
         self.write_ui()?;
+
         // quit conditionals
         if self.health <= 0 {
             self.quit = true;
@@ -254,6 +257,9 @@ impl Game {
         for (i, word) in self.c_words.iter().enumerate() {
             if self.input.to_lowercase().trim() == word.text.trim() {
                 self.score += 1;
+                if self.score % 5 == 0 {
+                    self.fallspeed = self.fallspeed - 1;
+                }
                 index = Some(i);
             }
         }
