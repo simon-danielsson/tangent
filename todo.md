@@ -4,4 +4,6 @@
 - [x] fix word ghosts
 - [x] make words not generate into eachother
 - [x] implement word falling
+- [x] implement word falling
+- [ ] when quitting normally it's fine, but if the u
 

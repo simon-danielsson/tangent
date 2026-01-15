@@ -12,9 +12,9 @@ use std::{
 };
 
 const FPS: f64 = 30.0;
-const FALLING_SPD: i32 = FPS as i32; // fallspeed counted with: FPS / FALLING_SPD
+const FALLING_SPD: i32 = 18; // fallspeed counted with: FPS / FALLING_SPD
 const LEXICON: &str = include_str!("lexicon.txt");
-const MAX_WORDS_IN_FRAME: usize = 3;
+const MAX_WORDS_IN_FRAME: usize = 5;
 const HEALTH_CHAR: &str = "o";
 
 #[derive(Clone)]
@@ -127,13 +127,16 @@ impl Game {
         }
 
         self.write_ui()?;
-
         // quit conditionals
         if self.health <= 0 {
-            self.quit(true)?;
+            self.quit = true;
         };
         if self.quit {
-            self.quit(false)?;
+            if self.health <= 0 {
+                self.quit(true)?;
+            } else {
+                self.quit(false)?;
+            }
         }
 
         // print queue
