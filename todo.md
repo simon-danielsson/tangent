@@ -2,6 +2,7 @@
 Current:
 
 - [ ] add some extra decorative falling things to make things more chaotic
+- [ ] instead of having the user wait after exiting, add a [Hit any key to exit]. Perhaps to the same with the intro screen
 
 ---
 
