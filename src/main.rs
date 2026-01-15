@@ -15,13 +15,7 @@ const FPS: f64 = 30.0;
 const FALLING_SPD: i32 = FPS as i32; // fallspeed counted with: FPS / FALLING_SPD
 const LEXICON: &str = include_str!("lexicon.txt");
 const MAX_WORDS_IN_FRAME: usize = 3;
-
-struct Rect {
-    x: u16,
-    y: u16,
-    w: u16,
-    h: u16,
-}
+const HEALTH_CHAR: &str = "o";
 
 #[derive(Clone)]
 struct Word {
@@ -57,7 +51,6 @@ struct Game {
     rows: u16,
     quit: bool,
     fps: Duration,
-    ui_printed: bool,
     fallspeed_cnt: i32,
     health: i32,
 }
@@ -74,7 +67,6 @@ impl Game {
             rows: 0,
             quit: false,
             fps: get_fps(FPS),
-            ui_printed: false,
             fallspeed_cnt: 0,
             health: 3,
         }
@@ -134,7 +126,7 @@ impl Game {
             self.gen_word();
         }
 
-        self.write_prompt()?;
+        self.write_ui()?;
 
         // quit conditionals
         if self.health <= 0 {
@@ -202,17 +194,52 @@ impl Game {
         Ok(())
     }
 
-    fn write_prompt(&mut self) -> io::Result<()> {
-        if !self.ui_printed {
-            self.so.queue(cursor::MoveTo(0, self.rows - 2))?;
-            let prompt_sep = "─".repeat(self.columns as usize);
-            self.so.write(prompt_sep.as_bytes())?;
-            self.ui_printed = true;
-        }
+    fn write_box(&mut self, content: String, w: u16, col: u16, row: u16) -> io::Result<()> {
+        let bc = vec!["╭", "─", "╮", "│", "╯", "─", "╰", "│"];
+        let top = format!("{}{}{}", bc[0], bc[1].repeat(w as usize - 2), bc[2]);
+        let bot = format!("{}{}{}", bc[6], bc[1].repeat(w as usize - 2), bc[4]);
+        let mid = format!(
+            "{}{}{}{}",
+            bc[3],
+            content,
+            " ".repeat(w as usize - 2 - content.chars().count()),
+            bc[3]
+        );
+        self.so.queue(cursor::MoveTo(col, row - 2))?;
+        self.so.write(top.as_bytes())?;
+        self.so.queue(cursor::MoveTo(col, row - 1))?;
+        self.so.write(mid.as_bytes())?;
+        self.so.queue(cursor::MoveTo(col, row))?;
+        self.so.write(bot.as_bytes())?;
+        Ok(())
+    }
 
-        self.so.queue(cursor::MoveTo(0, self.rows - 1))?;
-        self.so.queue(Clear(ClearType::CurrentLine))?;
-        self.so.write(self.input.as_bytes())?;
+    fn write_ui(&mut self) -> io::Result<()> {
+        for i in 0..=3 {
+            self.so.queue(cursor::MoveTo(0, self.rows - i))?;
+            self.so.queue(Clear(ClearType::CurrentLine))?;
+        }
+        let prompt = self.input.clone();
+        let score = format!("Score: {}", self.score);
+        let health = format!(
+            "Health: {}",
+            (format!("{HEALTH_CHAR} ")).repeat(self.health as usize)
+        );
+        let total_rows = self.rows;
+        let total_cols = self.columns;
+
+        // prompt
+        self.write_box(prompt, total_cols / 2, 0, total_rows - 3)?;
+        // score
+        self.write_box(score, total_cols / 4, total_cols / 2, total_rows - 3)?;
+        // health
+        self.write_box(
+            health,
+            total_cols / 4,
+            (total_cols / 2) + (total_cols / 4),
+            total_rows - 3,
+        )?;
+
         Ok(())
     }
 
