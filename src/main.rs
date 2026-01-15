@@ -4,6 +4,7 @@ use crossterm::{
     execute,
     terminal::{self, Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
+use rand::Rng;
 use std::{
     io::{self, Stdout, Write, stdout},
     thread,
@@ -11,12 +12,15 @@ use std::{
 };
 
 const FPS: f64 = 30.0;
-const TIME_LIMIT: f64 = 30.0;
+const FALLING_SPD: i32 = FPS as i32; // fallspeed counted with: FPS / FALLING_SPD
 const LEXICON: &str = include_str!("lexicon.txt");
+const MAX_WORDS_IN_FRAME: usize = 3;
 
+#[derive(Clone)]
 struct Word {
     text: String,
-    pos: (u16, u16), // col, row
+    pos: (u16, u16),      // col, row
+    prev_pos: (u16, u16), // col, row
 }
 
 fn main() -> io::Result<()> {
@@ -31,10 +35,8 @@ fn main() -> io::Result<()> {
     while !game.quit {
         game.game_loop()?;
         thread::sleep(game.fps);
-        game.so.flush()?;
     }
 
-    game.quit()?;
     disable_raw_mode()?;
     Ok(())
 }
@@ -50,6 +52,8 @@ struct Game {
     quit: bool,
     fps: Duration,
     ui_printed: bool,
+    fallspeed_cnt: i32,
+    health: i32,
 }
 
 impl Game {
@@ -65,6 +69,8 @@ impl Game {
             quit: false,
             fps: get_fps(FPS),
             ui_printed: false,
+            fallspeed_cnt: 0,
+            health: 3,
         }
     }
 
@@ -95,19 +101,68 @@ impl Game {
             }
         }
 
-        self.write_main()?;
+        // make words fall - if a word has fallen to far it gets removed
+        if self.fallspeed_cnt >= FALLING_SPD {
+            let mut index: Option<usize> = None;
+            for (i, word) in self.c_words.iter_mut().enumerate() {
+                word.prev_pos = word.pos;
+                if word.pos.1 == self.rows - 3 {
+                    index = Some(i);
+                } else {
+                    word.pos.1 += 1;
+                }
+            }
+            self.fallspeed_cnt = 0;
+            if let Some(i) = index {
+                self.c_words.remove(i);
+                self.health -= 1;
+            }
+            self.write_words()?;
+        } else {
+            self.fallspeed_cnt += 1;
+            self.write_words()?;
+        }
+
+        if self.c_words.len() < MAX_WORDS_IN_FRAME {
+            self.gen_word();
+        }
+
         self.write_prompt()?;
 
-        if self.quit {
-            self.quit()?;
+        // quit conditionals
+        if self.health <= 0 {
+            self.quit(true)?;
         };
+        if self.quit {
+            self.quit(false)?;
+        }
+
+        // print queue
+        self.so.flush()?;
         Ok(())
     }
 
-    fn write_main(&mut self) -> io::Result<()> {
-        todo!();
-        //
-        // Ok(())
+    fn gen_word(&mut self) {
+        let mut rng = rand::rng();
+        let rand_word_i = rng.random_range(0..=self.u_words.len());
+        let rand_word = self.u_words[rand_word_i].clone();
+        self.u_words.remove(rand_word_i);
+        let rand_col = rng.random_range((0)..=(self.columns - 5));
+        self.c_words.push(Word {
+            text: rand_word,
+            pos: (rand_col, 0),
+            prev_pos: (rand_col, 0),
+        });
+    }
+
+    fn write_words(&mut self) -> io::Result<()> {
+        for word in self.c_words.iter() {
+            self.so.queue(cursor::MoveTo(word.prev_pos.0, word.prev_pos.1))?;
+            terminal::Clear(ClearType::CurrentLine);
+            self.so.queue(cursor::MoveTo(word.pos.0, word.pos.1))?;
+            self.so.write(word.text.as_bytes())?;
+        }
+        Ok(())
     }
 
     fn write_prompt(&mut self) -> io::Result<()> {
@@ -151,12 +206,18 @@ impl Game {
         Ok(())
     }
 
-    fn quit(&mut self) -> io::Result<()> {
+    fn quit(&mut self, user_lost: bool) -> io::Result<()> {
         self.clear_screen();
-        let text = format!("Your final score: {}", self.score);
-        self.wr_ce_txt(text, 0)?;
+        let text_l1;
+        match user_lost {
+            true => text_l1 = format!("You lost all your health!"),
+            false => text_l1 = format!("Goodbye!"),
+        };
+        let text_l2 = format!("Your final score: {}", self.score);
+        self.wr_ce_txt(text_l1, 0)?;
+        self.wr_ce_txt(text_l2, 1)?;
         self.so.flush()?;
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_secs(3));
         self.so.queue(cursor::MoveTo(0, 0))?;
         self.so.execute(cursor::Show)?;
         self.clear_screen();
@@ -175,7 +236,8 @@ impl Game {
     fn intro(&mut self) -> io::Result<()> {
         self.clear_screen();
         let text_1 = format!("Type the falling words as fast as you can!");
-        let text_2 = format!("Get as many points as possible within {TIME_LIMIT} seconds!");
+        let text_2 =
+        format!("Get as many points as possible without depleting your health!");
         self.wr_ce_txt(text_1, 0)?;
         self.wr_ce_txt(text_2, 1)?;
         self.so.flush()?;
